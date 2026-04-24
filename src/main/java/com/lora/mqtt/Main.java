@@ -35,22 +35,50 @@ public class Main {
                 
                 @Override
                 public void connectionLost(Throwable cause) {
-                    System.out.println("❌ Connessione persa con il Gateway!");
+                    System.out.println(" Connessione persa con il Gateway!");
                 }
 
-                @Override
+               @Override
                 public void messageArrived(String topic, MqttMessage message) throws Exception {
-                    // QUESTO METODO SCATTA OGNI VOLTA CHE L'ESP32 MANDA UN PACCHETTO
                     String payloadJson = new String(message.getPayload());
                     
                     System.out.println("\n=== NUOVO PACCHETTO RICEVUTO ===");
-                    System.out.println("📍 Topic: " + topic);
-                    System.out.println("📦 Dati (JSON): " + payloadJson);
+                    System.out.println(" Topic: " + topic);
                     
-                    // In futuro, qui potrai usare una libreria come Gson o org.json 
-                    // per estrarre facilmente la stringa Base64 e riconvertirla nei tuoi 6 byte!
+                    // 1. Troviamo il campo "data":" nel JSON
+                    String ricerca = "\"data\":\"";
+                    int inizio = payloadJson.indexOf(ricerca);
+                    
+                    if (inizio != -1) {
+                        inizio += ricerca.length();
+                        int fine = payloadJson.indexOf("\"", inizio);
+                        String base64Data = payloadJson.substring(inizio, fine);
+                        
+                        System.out.println(" Payload Base64 grezzo: " + base64Data);
+                        
+                        // 2. Decodifichiamo il Base64 per riavere i nostri 6 Byte
+                        byte[] bytes = java.util.Base64.getDecoder().decode(base64Data);
+                        
+                        // 3. Se abbiamo esattamente 6 byte, ricostruiamo X, Y e Z
+                        if(bytes.length == 6) {
+                            // Ricostruiamo i numeri unendo i due byte (High e Low)
+                            // La formula usa gli operatori bitwise (Shift e OR)
+                            int asseX = (bytes[0] << 8) | (bytes[1] & 0xFF);
+                            int asseY = (bytes[2] << 8) | (bytes[3] & 0xFF);
+                            int asseZ = (bytes[4] << 8) | (bytes[5] & 0xFF);
+                            
+                            System.out.println(" DATI ACCELEROMETRO DECODIFICATI:");
+                            System.out.println("   Asse X: " + asseX);
+                            System.out.println("   Asse Y: " + asseY);
+                            System.out.println("   Asse Z: " + asseZ);
+                        } else {
+                            System.out.println("Attenzione: ricevuti " + bytes.length + " byte invece di 6.");
+                        }
+                        
+                    } else {
+                        System.out.println("Nessun campo 'data' trovato in questo JSON.");
+                    }
                 }
-
                 @Override
                 public void deliveryComplete(IMqttDeliveryToken token) {
                     // Non ci serve, noi stiamo solo ricevendo (Subscriber), non inviando.
@@ -60,11 +88,11 @@ public class Main {
             // 4. Connessione effettiva
             System.out.println("Tentativo di connessione al Gateway: " + BROKER_URL);
             client.connect(options);
-            System.out.println("✅ Connesso con successo al Broker MQTT!");
+            System.out.println(" Connesso con successo al Broker MQTT!");
 
             // 5. Iscrizione al Topic
             client.subscribe(TOPIC);
-            System.out.println("🎧 In ascolto dei dati dell'ESP32 sul topic: " + TOPIC);
+            System.out.println(" In ascolto dei dati dell'ESP32 sul topic: " + TOPIC);
 
         } catch (MqttException e) {
             System.out.println("Errore MQTT: " + e.getMessage());
